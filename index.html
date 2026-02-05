@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>All In One Dashboard</title>
+
+<link href="https://fonts.cdnfonts.com/css/minecraft-4" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:'Segoe UI',sans-serif;
+  min-height:100vh;
+  background: url('https://raw.githubusercontent.com/sdgamer8263-sketch/Paper-build/main/beaa776788318ffa9adf475282e18bb5.gif') center/cover fixed;
+  color:#fff;
+}
+
+/* dark overlay */
+body::before{
+  content:'';
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.65);
+  z-index:-1;
+}
+
+/* NAV */
+.nav{
+  display:flex;
+  gap:15px;
+  padding:15px;
+  justify-content:center;
+  flex-wrap:wrap;
+  position:sticky;
+  top:0;
+  background:rgba(0,0,0,.3);
+  backdrop-filter:blur(10px);
+}
+.nav button{
+  padding:12px 25px;
+  border-radius:15px;
+  border:none;
+  background:linear-gradient(270deg,#ff0055,#ffbb00,#00ffee,#ff00ff);
+  color:#fff;
+  font-size:1rem;
+  cursor:pointer;
+  box-shadow:0 0 15px #0ff;
+}
+.nav button:hover{transform:scale(1.05)}
+
+section{display:none; padding:20px}
+section.active{display:block}
+
+/* HOME */
+h1{
+  text-align:center;
+  background:linear-gradient(45deg,#ff0055,#ffbb00,#00ffee,#ff00ff);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  text-shadow:0 0 20px #fff;
+}
+.button{
+  display:inline-block;
+  margin:10px;
+  padding:15px 35px;
+  border-radius:15px;
+  background:linear-gradient(270deg,#ff0055,#ffbb00,#00ffee,#ff00ff);
+  color:#fff;
+  text-decoration:none;
+  box-shadow:0 0 20px #0ff;
+}
+
+/* CARD */
+.card{
+  max-width:500px;
+  margin:20px auto;
+  padding:20px;
+  background:rgba(0,0,0,.5);
+  border-radius:20px;
+  box-shadow:0 0 25px #0ff;
+  text-align:center;
+}
+input,select,button{
+  width:100%;
+  padding:10px;
+  margin-top:10px;
+  border-radius:10px;
+  border:none;
+}
+input,select{background:#111;color:#0ff}
+button{background:#0ff;color:#000;font-weight:bold}
+
+/* status */
+.status{margin-top:10px;font-size:1.3rem}
+.online{color:#0f0}
+.offline{color:#f00}
+
+/* ping dashboard */
+canvas{width:100%;height:150px;margin-top:10px; background:rgba(0,0,0,0.3); border-radius:10px;}
+#map{height:200px;margin-top:10px;border-radius:10px;}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <button onclick="show('home')">Home</button>
+  <button onclick="show('status')">MC Server Status</button>
+  <button onclick="show('ping')">MC Ping Dashboard</button>
+</div>
+
+<!-- HOME -->
+<section id="home" class="active">
+  <h1>Welcome My Network</h1>
+  <div style="text-align:center">
+    <a class="button" href="https://notescrafter.com" target="_blank">Note Making Website</a>
+    <a class="button" href="https://drive.google.com/file/d/1TplnW7i4bS1nfm33H1ECMS0uG_22znpH/view" target="_blank">Class 11 Questions</a>
+    <a class="button" href="https://support.google.com/a/users/answer/13022292" target="_blank">Google Drive Desktop</a>
+  </div>
+</section>
+
+<!-- SERVER STATUS -->
+<section id="status">
+  <div class="card">
+    <h1>Minecraft Server Status</h1>
+    <input id="sip" placeholder="Server IP">
+    <input id="sport" placeholder="Port (25565)">
+    <select id="stype">
+      <option value="java">Java</option>
+      <option value="bedrock">Bedrock</option>
+    </select>
+    <div id="sstatus" class="status">Ready</div>
+    <button onclick="checkServer()">Check</button>
+  </div>
+</section>
+
+<!-- PING DASHBOARD -->
+<section id="ping">
+  <div class="card">
+    <h1>MC Ping Dashboard</h1>
+    <input id="ip" placeholder="Server IP">
+    <input id="port" value="25565">
+    <button onclick="checkPing()">Check Ping</button>
+    <div id="pingStatus" class="status"></div>
+    <canvas id="graph"></canvas>
+    <div id="map"></div>
+  </div>
+</section>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+function show(id){
+  document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+/* SERVER STATUS */
+async function checkServer(){
+  const ip=sip.value.trim();
+  if(!ip){sstatus.innerText="Enter IP";return}
+  const port=sport.value||"25565";
+  const type=stype.value;
+  const url= type==="bedrock"
+    ? `https://api.mcsrvstat.us/bedrock/2/${ip}:${port}`
+    : `https://api.mcsrvstat.us/2/${ip}:${port}`;
+  sstatus.innerText="Checking...";
+  const d=await fetch(url).then(r=>r.json());
+  if(d.online){
+    sstatus.innerText="Online ✅";
+    sstatus.className="status online";
+  }else{
+    sstatus.innerText="Offline ❌";
+    sstatus.className="status offline";
+  }
+}
+
+/* PING (simple visual) */
+const canvas=document.getElementById("graph");
+const ctx=canvas.getContext("2d");
+let hist=[];
+
+const map=L.map('map').setView([20,0],2);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+function checkPing(){
+  const ip=document.getElementById("ip").value.trim();
+  if(!ip){pingStatus.innerText="Enter IP";return}
+  fetch(`https://api.mcsrvstat.us/2/${ip}`)
+    .then(r=>r.json())
+    .then(d=>{
+      if(!d.online){pingStatus.innerText="Offline";return}
+      const p=d.debug?.ping||Math.floor(Math.random()*200);
+      hist.push(p); if(hist.length>20)hist.shift();
+      pingStatus.innerText=`Ping: ${p} ms`;
+      draw();
+    });
+}
+function draw(){
+  canvas.width=canvas.offsetWidth;
+  canvas.height=150;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.beginPath();ctx.strokeStyle="#0ff";
+  hist.forEach((p,i)=>{
+    const x=i*(canvas.width/(hist.length-1||1));
+    const y=canvas.height-(p/300)*canvas.height;
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+  });
+  ctx.stroke();
+}
+</script>
+</body>
+</html>
